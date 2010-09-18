@@ -52,6 +52,7 @@ require "couchrest/model/designs/view"
 # Monkey patches applied to couchrest
 require "couchrest/model/support/couchrest_design"
 require "couchrest/model/support/couchrest_database"
+require "couchrest/database/casted_view"
 
 # Core Extensions
 require "couchrest/model/core_extensions/hash"
@@ -60,8 +61,8 @@ require "couchrest/model/core_extensions/time_parsing"
 # Base libraries
 require "couchrest/model/casted_model"
 require "couchrest/model/base"
-# Add rails support *after* everything has loaded
 
+# Add rails support *after* everything has loaded
 if defined?(Rails)
   require "couchrest/railtie"
 end
