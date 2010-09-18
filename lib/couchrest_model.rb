@@ -3,13 +3,13 @@ require 'couchrest'
 
 gem "tzinfo", ">= 0.3.22"
 
-gem 'railties', ">= 3.0.0.rc"
-gem "activesupport", ">= 3.0.0.rc"
+gem 'railties', ">= 3.0.0"
+gem "activesupport", ">= 3.0.0"
 
 require 'active_support/core_ext'
 require 'active_support/json'
 
-gem "activemodel", ">= 3.0.0.rc"
+gem "activemodel", ">= 3.0.0"
 require 'active_model'
 require "active_model/callbacks"
 require "active_model/conversion"
