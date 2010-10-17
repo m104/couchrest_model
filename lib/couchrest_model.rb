@@ -60,6 +60,7 @@ require "couchrest/model/core_extensions/time_parsing"
 # Base libraries
 require "couchrest/model/casted_model"
 require "couchrest/model/base"
+require "couchrest/database/casted_view"
 # Add rails support *after* everything has loaded
 
 if defined?(Rails)
