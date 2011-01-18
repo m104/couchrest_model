@@ -52,6 +52,7 @@ require "couchrest/model/configuration"
 # Monkey patches applied to couchrest
 require "couchrest/model/support/couchrest"
 require "couchrest/model/support/hash"
+require "couchrest/database/casted_view"
 
 # Base libraries
 require "couchrest/model/casted_model"
