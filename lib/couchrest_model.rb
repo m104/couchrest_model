@@ -1,15 +1,3 @@
-gem 'couchrest', "~> 1.0.0"
-require 'couchrest'
-
-gem "tzinfo", "~> 0.3.22"
-
-gem 'railties', "~> 3.0.1"
-gem "activesupport", "~> 3.0.1"
-
-require 'active_support/core_ext'
-require 'active_support/json'
-
-gem "activemodel", "~> 3.0.1"
 require 'active_model'
 require "active_model/callbacks"
 require "active_model/conversion"
@@ -21,7 +9,9 @@ require "active_model/translation"
 require "active_model/validator"
 require "active_model/validations"
 
-gem "mime-types", "~> 1.15"
+require 'active_support/core_ext'
+require 'active_support/json'
+
 require 'mime/types'
 require "enumerator"
 require "time"
@@ -29,6 +19,8 @@ require 'digest/md5'
 
 require 'bigdecimal' # used in typecast
 require 'bigdecimal/util' # used in typecast
+
+require 'couchrest'
 
 require 'couchrest/model'
 require 'couchrest/model/errors'

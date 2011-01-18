@@ -28,11 +28,32 @@ but no guarantees!
 
     gem 'couchrest_model', :git => 'git://github.com/couchrest/couchrest_model.git'
 
+### Development
+
+CouchRest Model now comes with a Gemfile to help with development. If you want to make changes to the code, download a copy then run:
+
+    bundle install
+
+That should set everything up for `rake spec` to be run correctly. Update the couchrest_model.gemspec if your alterations
+use different gems.
+
 ## Generators
 
 ### Model
 
 		$ rails generate model person --orm=couchrest_model
+
+## Useful links and extensions
+
+Try some of these gems that add extra funcionality to couchrest_model:
+
+* [memories](http://github.com/moonmaster9000/memories) - object versioning using attachments (Matt Parker)
+* [couch_publish](http://github.com/moonmaster9000/couch_publish) - versioned state machine for draft and published documents (Matt Parker)
+* [couch_photo](http://github.com/moonmaster9000/couch_photo) - attach images to documents with variations (Matt Parker)
+* [copycouch](http://github.com/moonmaster9000/copycouch) - single document replication on documents (Matt Parker)
+* [recloner](https://github.com/moonmaster9000/recloner) - clone documents easily (Matt Parker)
+
+If you have an extension that you'd us to add to this list, please get in touch!
 			   
 ## General Usage 
 
@@ -351,7 +372,7 @@ CouchRest Model supports a few configuration options. These can be set either fo
 base or for a specific model of your chosing. To configure globally, provide something similar to the 
 following in your projects loading code:
 
-    CouchRestModel::Model::Base.configure do |config|
+    CouchRest::Model::Base.configure do |config|
       config.mass_assign_any_attribute = true
       config.model_type_key = 'couchrest-type'
     end
@@ -380,13 +401,6 @@ CouchRest Model is compatible with rails and provides some ActiveRecord-like met
 The CouchRest companion rails project [http://github.com/hpoydar/couchrest-rails](http://github.com/hpoydar/couchrest-rails) is great for providing default connection details for your database. At the time of writting however it does not provide explicit support for CouchRest Model.
 
 CouchRest Model and the original CouchRest ExtendedDocument do not share the same namespace, as such you should not have any problems using them both at the same time. This might help with migrations.
-
-
-### Rails 3.0
-
-In your Gemfile require the gem with a simple line:
-
-    gem "couchrest_model"
 
 
 ## Testing
