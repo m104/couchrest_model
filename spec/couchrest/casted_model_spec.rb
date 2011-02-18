@@ -24,19 +24,24 @@ class DummyModel < CouchRest::Model::Base
   property :sub_models do |child|
     child.property :title
   end
+  property :param_free_sub_models do
+    property :title
+  end
 end
 
 class WithCastedCallBackModel < Hash
   include CouchRest::Model::CastedModel
   property :name
-  property :run_before_validate
-  property :run_after_validate
+  property :run_before_validation
+  property :run_after_validation
 
-  before_validate do |object|
-    object.run_before_validate = true
+  validates_presence_of :run_before_validation
+
+  before_validation do |object|
+    object.run_before_validation = true
   end
-  after_validate do |object|
-    object.run_after_validate = true
+  after_validation do |object|
+    object.run_after_validation = true
   end
 end
 
@@ -97,6 +102,14 @@ describe CouchRest::Model::CastedModel do
     it "should be updatable using a hash" do
       @obj.sub_models << {:title => 'test'}
       @obj.sub_models.first.title.should eql('test')
+    end
+    it "should be empty intitally (without params)" do
+      @obj.param_free_sub_models.should_not be_nil
+      @obj.param_free_sub_models.should be_empty
+    end
+    it "should be updatable using a hash (without params)" do
+      @obj.param_free_sub_models << {:title => 'test'}
+      @obj.param_free_sub_models.first.title.should eql('test')
     end
   end
 
@@ -284,6 +297,11 @@ describe CouchRest::Model::CastedModel do
         @toy2.errors.should be_empty
         @toy3.errors.should_not be_empty
       end
+
+      it "should not use dperecated ActiveModel options" do
+        ActiveSupport::Deprecation.should_not_receive(:warn)
+        @cat.should_not be_valid
+      end
     end
 
     describe "on a casted model property" do
@@ -423,15 +441,15 @@ describe CouchRest::Model::CastedModel do
     end
 
     describe "validate" do
-      it "should run before_validate before validating" do
-        @model.run_before_validate.should be_nil
+      it "should run before_validation before validating" do
+        @model.run_before_validation.should be_nil
         @model.should be_valid
-        @model.run_before_validate.should be_true
+        @model.run_before_validation.should be_true
       end
-      it "should run after_validate after validating" do
-        @model.run_after_validate.should be_nil
+      it "should run after_validation after validating" do
+        @model.run_after_validation.should be_nil
         @model.should be_valid
-        @model.run_after_validate.should be_true
+        @model.run_after_validation.should be_true
       end
     end
   end
