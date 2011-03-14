@@ -9,7 +9,7 @@ for validations and callbacks.
 If your project is still running Rails 2.3, you'll have to continue using ExtendedDocument as 
 it is not possible to load ActiveModel into programs that do not use ActiveSupport 3.0.
 
-CouchRest Model is only tested on CouchDB 1.0.0 or newer.
+CouchRest Model is only properly tested on CouchDB version 1.0 or newer.
 
 ## Install
 
@@ -19,12 +19,11 @@ CouchRest Model is only tested on CouchDB 1.0.0 or newer.
 
 ### Bundler
 
-If you're using bundler, just define a line similar to the following in your project's Gemfile:
+If you're using bundler, define a line similar to the following in your project's Gemfile:
 
     gem 'couchrest_model'
 
-You might also consider using the latest git repository. All tests should pass in the master code branch
-but no guarantees!
+You might also consider using the latest git repository. We try to make sure the current version in git is stable and at the very least all tests should pass.
 
     gem 'couchrest_model', :git => 'git://github.com/couchrest/couchrest_model.git'
 
@@ -100,7 +99,7 @@ be type casted and other options such as the default value. These replace your t
 `add_column` methods found in relational database migrations.
 
 Attributes with a property definition will have setter and getter methods defined for them. Any other attibute
-can be set in the same way you'd update a Hash, this funcionality is inherited from CouchRest Documents.
+can be set as if the model were a Hash, this funcionality is inherited from CouchRest Documents.
 
 Here are a few examples of the way properties are used:
 
@@ -222,7 +221,7 @@ you'd like to use. For example:
       property :toys, [CatToy]
     end
 
-    @cat = Cat.new(:name => 'Felix', :toys => [{:name => 'mouse', :purchases => 1.month.ago}])
+    @cat = Cat.new(:name => 'Felix', :toys => [{:name => 'mouse', :purchased => 1.month.ago}])
     @cat.toys.first.class == CatToy
     @cat.toys.first.name == 'mouse'
 
@@ -252,6 +251,133 @@ Anonymous classes will *only* create arrays of objects. If you're more of the tr
 can be provided allowing you to use this variable before each method call inside the anonymous class. This is useful
 if you need to access variables outside of the block.
 
+## Views
+
+CouchDB views can be quite difficult to get grips with at first as they are quite different from what you'd expect with SQL queries in a normal Relational Database. Checkout some of the [CouchDB documentation on views](http://wiki.apache.org/couchdb/Introduction_to_CouchDB_views) to get to grips with the basics. The key is to remember that CouchDB will only generate indexes from which you can extract consecutive rows of data, filtering other than between two points in a data set is not possible.
+
+CouchRest Model has great support for views, and since version 1.1.0 we added support for a View objects that make accessing your data even easier. 
+
+### The Old Way
+
+Here's an example of adding a view to our Cat class:
+
+    class Cat < CouchRest::Model::Base
+      property :name, String
+      property :toys, [CatToy]
+
+      view_by :name
+    end
+
+The `view_by` method will create a view in the Cat's design document called "by_name". This will allow searches to be made for the Cat's name attribute. Calling `Cat.by_name` will send a query of to the database and return an array of all the Cat objects available. Internally, a map function is generated automatically and stored in CouchDB's design document for the current model, it'll look something like the following:
+
+    function(doc) {
+      if (doc['couchrest-type'] == 'Cat' && doc['name']) {
+        emit(doc.name, null);
+      }
+    }
+
+By default, a special view called `all` is created and added to all couchrest models that allows you access to all the documents in the database that match the model. By default, these will be ordered by each documents id field.
+
+It is also possible to create views of multiple keys, for example:
+
+    view_by :birthday, :name
+
+This will create an view of all the cats' birthdays and their names called `by_birthday_and_name`.
+
+Sometimes the automatically generate map function might not be sufficient for more complicated queries. To customize, add the :map and :reduce functions when creating the view:
+
+    view_by :tags,
+      :map =>
+        "function(doc) {
+          if (doc['model'] == 'Post' && doc.tags) {
+            doc.tags.forEach(function(tag){
+              emit(doc.tag, 1);
+            });
+          }
+        }",
+      :reduce =>
+        "function(keys, values, rereduce) {
+          return sum(values);
+        }"
+
+Calling a view will return document objects by default, to get access to the raw CouchDB result add the `:raw => true` option to get a hash instead. Custom views can also be queried with `:reduce => true` to return reduce results. The default is to query with `:reduce => false`.
+ 
+Views are generated (on a per-model basis) lazily on first-access. This means that if you are deploying changes to a view, the views for
+that model won't be available until generation is complete. This can take some time with large databases. Strategies are in the works.
+
+### View Objects
+
+Since CouchRest Model 1.1.0 it is now possible to create views that return objects chainable objects, similar to those you'd find in the Sequel Ruby library or Rails 3's Arel. Heres an example of creating a few views:
+
+    class Post < CouchRest::Model::Base
+      property :title
+      property :body
+      property :posted_at, DateTime
+      property :tags, [String]
+
+      design do
+        view :by_title
+        view :by_posted_at_and_title
+        view :tag_list,
+          :map =>
+            "function(doc) {
+              if (doc['model'] == 'Post' && doc.tags) {
+                doc.tags.forEach(function(tag){
+                  emit(doc.tag, 1);
+                });
+              }
+            }",
+          :reduce =>
+            "function(keys, values, rereduce) {
+              return sum(values);
+            }"
+      end
+
+You'll see that this new syntax requires all views to be defined inside a design block. Unlike the old version, the keys to be used in a query are determined from the name of the view, not the other way round. Acessing data is the fun part:
+
+    # Prepare a query:
+    view = Post.by_posted_at_and_title.skip(5).limit(10)
+
+    # Fetch the results:
+    view.each do |post|
+      puts "Title: #{post.title}"
+    end
+
+    # Grab the CouchDB result information with the same object:
+    view.total_rows   => 10
+    view.offset       => 5
+
+    # Re-use and add new filters
+    filter = view.startkey([1.month.ago]).endkey([Date.current, {}])
+
+    # Fetch row results without the documents:
+    filter.rows.each do |row|
+      puts "Row value: #{row.value} Doc ID: #{row.id}"
+    end
+
+    # Lazily load documents (take last row from previous example):
+    row.doc      => Fetch last Post document from database
+
+    # Using reduced queries is also easy:
+    tag_usage = Post.tag_list.reduce.group_level(1)
+    tag_usage.rows.each do |row|
+      puts "Tag: #{row.key}  Uses: #{row.value}"
+    end
+
+#### Pagination
+
+The view objects have built in support for pagination based on the [kaminari](https://github.com/amatsuda/kaminari) gem. Methods are provided to match those required by the library to peform pagination.
+
+For your view to support paginating the results, it must use a reduce function that provides a total count of the documents in the result set. By default, auto-generated views include a reduce function that supports this.
+
+Use pagination as follows:
+
+    # Prepare a query:
+    @posts = Post.by_title.page(params[:page]).per(10)
+    
+    # In your view, with the kaminari gem loaded:
+    paginate @posts
+
 
 ## Assocations
 
@@ -261,7 +387,7 @@ Two types at the moment:
 
     collection_of :tags
 
-This is a somewhat controvesial feature of CouchRest Model that some document database purists may fringe at. CouchDB does not yet povide many features to support relationships between documents but the fact of that matter is that its a very useful paradigm for modelling data systems.
+This is a somewhat controvesial feature of CouchRest Model that some document database purists may cringe at. CouchDB does not yet povide many features to support relationships between documents but the fact of that matter is that its a very useful paradigm for modelling data systems.
 
 In the near future we hope to add support for a `has_many` relationship that takes of the _Linked Documents_ feature that arrived in CouchDB 0.11.
 
@@ -372,6 +498,48 @@ A really interesting use of `:proxy` and `:view` together could be where you'd l
     end
 
 Pretty cool!
+
+## Proxy Support
+
+CouchDB makes it really easy to create databases on the fly, so easy in fact that it is perfectly
+feasable to have one database per user or per company or per whatever makes sense to split into
+its own individual database. CouchRest Model now makes it really easy to support this scenario
+using the proxy methods. Here's a quick example:
+
+    # Define a master company class, its children should be in their own DB
+    class Company < CouchRest::Model::Base
+      use_database COUCHDB_DATABASE
+      property :name
+      property :slug
+
+      proxy_for :invoices
+
+      def proxy_database
+        @proxy_database ||= COUCHDB_SERVER.database!("project_#{slug}")
+      end
+    end
+
+    # Invoices belong to a company
+    class Invoice < CouchRest::Model::Base
+      property :date
+      property :total
+
+      proxied_by :company
+
+      design do
+        view :by_date
+      end
+    end
+
+By setting up our models like this, the invoices should be accessed via a company object:
+
+    company = Company.first
+    company.invoices.new            # build a new invoice
+    company.invoices.by_date.first  # find company's first invoice by date
+
+Internally, all requests for invoices are passed through a model proxy. Aside from the 
+basic methods and views, it also ensures that some of the more complex queries are supported
+such as validating for uniqueness and associations.
 
 
 ## Configuration
