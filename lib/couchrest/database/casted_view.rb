@@ -17,8 +17,8 @@ module CouchRest
         type = doc['couchrest-type']
         if type
           klass = type.constantize
-          if klass.respond_to? :create_from_database
-            row['doc'] = klass.create_from_database(doc)
+          if klass.respond_to? :build_from_database
+            row['doc'] = klass.build_from_database(doc)
           end
         end
         row
