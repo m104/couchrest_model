@@ -25,7 +25,7 @@ module CouchRest
             self.owner    = parent
             self.name     = name.to_s
             # Default options:
-            self.query    = { :reduce => false }
+            self.query    = { }
           elsif parent.is_a?(self.class)
             self.model    = (new_query.delete(:proxy) || parent.model)
             self.owner    = parent.owner
@@ -139,12 +139,6 @@ module CouchRest
           execute['total_rows']
         end
 
-        # Convenience wrapper around the rows result set. This will provide
-        # and array of keys.
-        def keys
-          rows.map{|r| r.key}
-        end
-
         # Convenience wrapper to provide all the values from the route
         # set without having to go through +rows+.
         def values
@@ -181,7 +175,7 @@ module CouchRest
         #
         # Cannot be used when the +#startkey+ or +#endkey+ have been set.
         def key(value)
-          raise "View#key cannot be used when startkey or endkey have been set" unless query[:startkey].nil? && query[:endkey].nil?
+          raise "View#key cannot be used when startkey or endkey have been set" unless query[:keys].nil? && query[:startkey].nil? && query[:endkey].nil?
           update_query(:key => value)
         end
 
@@ -193,7 +187,7 @@ module CouchRest
         #
         # Cannot be used if the key has been set.
         def startkey(value)
-          raise "View#startkey cannot be used when key has been set" unless query[:key].nil?
+          raise "View#startkey cannot be used when key has been set" unless query[:key].nil? && query[:keys].nil?
           update_query(:startkey => value)
         end
 
@@ -210,7 +204,7 @@ module CouchRest
         # See the +#startkey+ method for more details and the +#inclusive_end+
         # option.
         def endkey(value)
-          raise "View#endkey cannot be used when key has been set" unless query[:key].nil?
+          raise "View#endkey cannot be used when key has been set" unless query[:key].nil? && query[:keys].nil?
           update_query(:endkey => value)
         end
 
@@ -219,6 +213,22 @@ module CouchRest
         # call or a string.
         def endkey_doc(value)
           update_query(:endkey_docid => value.is_a?(String) ? value : value.id)
+        end
+
+        # Keys is a special CouchDB option that will cause the view request to be POSTed
+        # including an array of keys. Only documents with the matching keys will be 
+        # returned. This is much faster than sending multiple requests for a set 
+        # non-consecutive documents.
+        #
+        # If no values are provided, this method will act as a wrapper around 
+        # the rows result set, providing an array of keys.
+        def keys(*keys)
+          if keys.empty?
+            rows.map{|r| r.key}
+          else
+            raise "View#keys cannot by used when key or startkey/endkey have been set" unless query[:key].nil? && query[:startkey].nil? && query[:endkey].nil?
+            update_query(:keys => keys.first)
+          end
         end
 
 
@@ -341,8 +351,6 @@ module CouchRest
           (offset_value / limit_value) + 1
         end
 
-
-
         protected
 
         def include_docs!
@@ -371,7 +379,7 @@ module CouchRest
         def use_database
           query[:database] || model.database
         end
-        
+
         def execute
           return self.result if result
           raise "Database must be defined in model or view!" if use_database.nil?
@@ -412,6 +420,16 @@ module CouchRest
           # The view name is the same, but three keys would be used in the
           # subsecuent index.
           #
+          # By default, a check is made on each of the view's keys to ensure they
+          # do not contain a nil value ('null' in javascript). This is probably what
+          # you want in most cases but sometimes in can be useful to create an
+          # index where nil is permited. Set the <tt>:allow_nil</tt> option to true to
+          # remove this check.
+          #
+          # Conversely, keys are not checked to see if they are empty or blank. If you'd
+          # like to enable this, set the <tt>:allow_blank</tt> option to false. The default
+          # is true, empty strings are permited in the indexes.
+          #
           def create(model, name, opts = {})
 
             unless opts[:map]
@@ -421,12 +439,14 @@ module CouchRest
 
               raise "View cannot be created without recognised name, :map or :by options" if opts[:by].nil?
 
+              opts[:allow_blank] = opts[:allow_blank].nil? ? true : opts[:allow_blank]
               opts[:guards] ||= []
               opts[:guards].push "(doc['#{model.model_type_key}'] == '#{model.to_s}')"
 
               keys = opts[:by].map{|o| "doc['#{o}']"}
               emit = keys.length == 1 ? keys.first : "[#{keys.join(', ')}]"
-              opts[:guards] += keys.map{|k| "(#{k} != null)"}
+              opts[:guards] += keys.map{|k| "(#{k} != null)"} unless opts[:allow_nil]
+              opts[:guards] += keys.map{|k| "(#{k} != '')"} unless opts[:allow_blank]
               opts[:map] = <<-EOF
                 function(doc) {
                   if (#{opts[:guards].join(' && ')}) {

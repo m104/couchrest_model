@@ -4,31 +4,36 @@ module CouchRest
     module Proxyable
       extend ActiveSupport::Concern
 
-      included do
-        attr_accessor :model_proxy
-      end
-
       module ClassMethods
 
         # Define a collection that will use the base model for the database connection
         # details.
-        def proxy_for(model_name, options = {})
+        def proxy_for(assoc_name, options = {})
           db_method = options[:database_method] || "proxy_database"
-          options[:class_name] ||= model_name.to_s.singularize.camelize
+          options[:class_name] ||= assoc_name.to_s.singularize.camelize
           class_eval <<-EOS, __FILE__, __LINE__ + 1
-            def #{model_name}
+            def #{assoc_name}
               unless respond_to?('#{db_method}')
                 raise "Missing ##{db_method} method for proxy"
               end
-              @#{model_name} ||= CouchRest::Model::Proxyable::ModelProxy.new(::#{options[:class_name]}, self, self.class.to_s.underscore, #{db_method})
+              @#{assoc_name} ||= CouchRest::Model::Proxyable::ModelProxy.new(::#{options[:class_name]}, self, self.class.to_s.underscore, #{db_method})
             end
           EOS
         end
 
         def proxied_by(model_name, options = {})
-          raise "Model can only be proxied once or ##{model_name} already defined" if method_defined?(model_name)
+          raise "Model can only be proxied once or ##{model_name} already defined" if method_defined?(model_name) || !proxy_owner_method.nil?
+          self.proxy_owner_method = model_name
+          attr_accessor :model_proxy
           attr_accessor model_name
         end
+
+        # Define an a class variable accessor ready to be inherited and unique
+        # for each Class using the base.
+        # Perhaps there is a shorter way of writing this.
+        def proxy_owner_method=(name); @proxy_owner_method = name; end
+        def proxy_owner_method; @proxy_owner_method; end
+
       end
 
       class ModelProxy
@@ -132,10 +137,10 @@ module CouchRest
         # Update the document's proxy details, specifically, the fields that
         # link back to the original document.
         def proxy_update(doc)
-          if doc
-            doc.database = @database if doc.respond_to?(:database=)
-            doc.model_proxy = self if doc.respond_to?(:model_proxy=) 
-            doc.send("#{owner_name}=", owner) if doc.respond_to?("#{owner_name}=")
+          if doc && doc.is_a?(model)
+            doc.database = @database
+            doc.model_proxy = self
+            doc.send("#{owner_name}=", owner)
           end
           doc
         end

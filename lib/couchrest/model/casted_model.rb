@@ -53,7 +53,7 @@ module CouchRest::Model
     end
     alias :to_key :id
     alias :to_param :id
-    
+
     # Sets the attributes from a hash
     def update_attributes_without_saving(hash)
       hash.each do |k, v|
