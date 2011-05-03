@@ -60,7 +60,8 @@ describe 'Casted Views' do
   it 'should properly cast documents into CouchRest::Model objects' do
     rows = DB.casted_view('generic/by_word')['rows']
     rows.each do |row|
-      row['doc'].class.should == row['doc']['couchrest-type'].constantize
+      doc = row['doc']
+      doc.class.should == doc['type'].constantize
     end
   end
 
