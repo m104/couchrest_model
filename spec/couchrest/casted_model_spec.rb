@@ -79,6 +79,10 @@ describe CouchRest::Model::CastedModel do
       @obj.name.should == 'Eric'
       @obj.details['color'].should == 'orange'
     end
+    it "should always return base_doc? as false" do
+      @obj.base_doc?.should be_false
+    end
+
   end
 
   describe "casted as an attribute, but without a value" do
@@ -132,6 +136,10 @@ describe CouchRest::Model::CastedModel do
       @casted_obj.casted_by.should == @obj
     end
 
+    it "should know which property casted it" do
+      @casted_obj.casted_by_property.should == @obj.properties.detect{|p| p.to_s == 'casted_attribute'}
+    end
+
     it "should return nil for the 'no_value' attribute" do
       @casted_obj.no_value.should be_nil
     end
@@ -160,7 +168,7 @@ describe CouchRest::Model::CastedModel do
     end
 
     it "should cast the array properly" do
-      @obj.keywords.should be_an_instance_of(Array)
+      @obj.keywords.should be_kind_of(Array)
       @obj.keywords.first.should == 'couch'
     end
   end

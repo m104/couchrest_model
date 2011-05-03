@@ -74,7 +74,7 @@ describe "Design View" do
       it "should auto generate mapping from name" do
         lambda { @klass.create(DesignViewModel, 'by_title') }.should_not raise_error
         str = @design_doc['views']['by_title']['map']
-        str.should include("((doc['couchrest-type'] == 'DesignViewModel') && (doc['title'] != null))")
+        str.should include("((doc['#{DesignViewModel.model_type_key}'] == 'DesignViewModel') && (doc['title'] != null))")
         str.should include("emit(doc['title'], 1);")
         str = @design_doc['views']['by_title']['reduce']
         str.should include("return sum(values);")
@@ -163,10 +163,17 @@ describe "Design View" do
         end
       end
 
+      describe "#length" do
+        it "should provide a length from the docs array" do
+          @obj.should_receive(:docs).and_return([1, 2, 3])
+          @obj.length.should eql(3)
+        end
+      end
+
       describe "#count" do
         it "should raise an error if view prepared for group" do
           @obj.should_receive(:query).and_return({:group => true})
-          lambda { @obj.count }.should raise_error
+          lambda { @obj.count }.should raise_error(/group/)
         end
 
         it "should return first row value if reduce possible" do
@@ -174,6 +181,8 @@ describe "Design View" do
           row = mock("Row")
           @obj.should_receive(:can_reduce?).and_return(true)
           @obj.should_receive(:reduce).and_return(view)
+          view.should_receive(:skip).with(0).and_return(view)
+          view.should_receive(:limit).with(1).and_return(view)
           view.should_receive(:rows).and_return([row])
           row.should_receive(:value).and_return(2)
           @obj.count.should eql(2)
@@ -182,6 +191,8 @@ describe "Design View" do
           view = mock("SubView")
           @obj.should_receive(:can_reduce?).and_return(true)
           @obj.should_receive(:reduce).and_return(view)
+          view.should_receive(:skip).with(0).and_return(view)
+          view.should_receive(:limit).with(1).and_return(view)
           view.should_receive(:rows).and_return([])
           @obj.count.should eql(0)
         end
@@ -375,6 +386,24 @@ describe "Design View" do
           @obj.should_receive(:update_query).with({:descending => true})
           @obj.descending
         end
+        it "should reverse start and end keys if given" do
+          @obj = @obj.startkey('a').endkey('z')
+          @obj = @obj.descending
+          @obj.query[:endkey].should eql('a')
+          @obj.query[:startkey].should eql('z')
+        end
+        it "should reverse even if start or end nil" do
+          @obj = @obj.startkey('a')
+          @obj = @obj.descending
+          @obj.query[:endkey].should eql('a')
+          @obj.query[:startkey].should be_nil
+        end
+        it "should reverse start_doc and end_doc keys if given" do
+          @obj = @obj.startkey_doc('a').endkey_doc('z')
+          @obj = @obj.descending
+          @obj.query[:endkey_docid].should eql('a')
+          @obj.query[:startkey_docid].should eql('z')
+        end
       end
 
       describe "#limit" do
@@ -528,6 +557,7 @@ describe "Design View" do
           # disable real execution!
           @design_doc = mock("DesignDoc")
           @design_doc.stub!(:view_on)
+          @obj.model.stub!(:save_design_doc)
           @obj.model.stub!(:design_doc).and_return(@design_doc)
         end
 
@@ -550,27 +580,17 @@ describe "Design View" do
           @obj.send(:execute)
         end
 
+        it "should call to save the design document" do
+          @obj.should_receive(:can_reduce?).and_return(false)
+          @obj.model.should_receive(:save_design_doc).with(DB)
+          @obj.send(:execute)
+        end
+
         it "should populate the results" do
           @obj.should_receive(:can_reduce?).and_return(true)
           @design_doc.should_receive(:view_on).and_return('foos')
           @obj.send(:execute)
           @obj.result.should eql('foos')
-        end
-
-        it "should retry once on a resource not found error" do
-          @obj.should_receive(:can_reduce?).and_return(true)
-          @obj.model.should_receive(:save_design_doc)
-          @design_doc.should_receive(:view_on).ordered.and_raise(RestClient::ResourceNotFound)
-          @design_doc.should_receive(:view_on).ordered.and_return('foos')
-          @obj.send(:execute)
-          @obj.result.should eql('foos')
-        end
-
-        it "should retry twice and fail on a resource not found error" do
-          @obj.should_receive(:can_reduce?).and_return(true)
-          @obj.model.should_receive(:save_design_doc)
-          @design_doc.should_receive(:view_on).twice.and_raise(RestClient::ResourceNotFound)
-          lambda { @obj.send(:execute) }.should raise_error(RestClient::ResourceNotFound)
         end
 
         it "should remove nil values from query" do
@@ -771,6 +791,10 @@ describe "Design View" do
         docs = DesignViewModel.by_name.keys(["Judith", "Peter"]).all
         docs[0].name.should eql("Judith")
         docs[1].name.should eql("Peter")
+      end
+      it "should provide count even if limit or skip set" do
+        docs = DesignViewModel.by_name.limit(20).skip(2)
+        docs.count.should eql(5)
       end
     end
 

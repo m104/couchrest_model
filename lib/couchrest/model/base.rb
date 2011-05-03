@@ -5,9 +5,10 @@ module CouchRest
       extend ActiveModel::Naming
 
       include CouchRest::Model::Configuration
+      include CouchRest::Model::Connection
       include CouchRest::Model::Persistence
       include CouchRest::Model::Callbacks
-      include CouchRest::Model::DocumentQueries    
+      include CouchRest::Model::DocumentQueries
       include CouchRest::Model::Views
       include CouchRest::Model::DesignDoc
       include CouchRest::Model::ExtendedAttachments
@@ -18,14 +19,17 @@ module CouchRest
       include CouchRest::Model::Associations
       include CouchRest::Model::Validations
       include CouchRest::Model::Designs
+      include CouchRest::Model::CastedBy
+      include CouchRest::Model::Dirty
 
       def self.subclasses
         @subclasses ||= []
       end
-      
+
       def self.inherited(subklass)
         super
         subklass.send(:include, CouchRest::Model::Properties)
+
         subklass.class_eval <<-EOS, __FILE__, __LINE__ + 1
           def self.inherited(subklass)
             super
@@ -36,16 +40,12 @@ module CouchRest
         EOS
         subclasses << subklass
       end
-      
-      # Accessors
-      attr_accessor :casted_by
-
 
       # Instantiate a new CouchRest::Model::Base by preparing all properties
       # using the provided document hash.
       #
       # Options supported:
-      # 
+      #
       # * :directly_set_attributes: true when data comes directly from database
       # * :database: provide an alternative database
       #
@@ -59,8 +59,8 @@ module CouchRest
         end
         after_initialize if respond_to?(:after_initialize)
       end
-     
-      
+
+
       # Temp solution to make the view_by methods available
       def self.method_missing(m, *args, &block)
         if has_view?(m)
@@ -74,24 +74,9 @@ module CouchRest
         end
         super
       end
-      
-      ### instance methods
-      
-      # Gets a reference to the actual document in the DB
-      # Calls up to the next document if there is one,
-      # Otherwise we're at the top and we return self
-      def base_doc
-        return self if base_doc?
-        @casted_by.base_doc
-      end
-      
-      # Checks if we're the top document
-      def base_doc?
-        !@casted_by
-      end
-      
+
       ## Compatibility with ActiveSupport and older frameworks
-  
+
       # Hack so that CouchRest::Document, which descends from Hash,
       # doesn't appear to Rails routing as a Hash of options
       def is_a?(klass)
@@ -103,14 +88,14 @@ module CouchRest
       def persisted?
         !new?
       end
-      
+
       def to_key
-        new? ? nil : [id] 
+        new? ? nil : [id]
       end
 
       alias :to_param :id
       alias :new_record? :new?
       alias :new_document? :new?
-    end    
+    end
   end
 end

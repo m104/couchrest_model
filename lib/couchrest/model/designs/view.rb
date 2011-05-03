@@ -90,6 +90,13 @@ module CouchRest
           result ? all.last : limit(1).descending.all.last
         end
 
+        # Return the number of documents in the currently defined result set.
+        # Use <tt>#count</tt> for the total number of documents regardless
+        # of the current limit defined.
+        def length
+          docs.length
+        end
+
         # Perform a count operation based on the current view. If the view
         # can be reduced, the reduce will be performed and return the first
         # value. This is okay for most simple queries, but may provide
@@ -106,7 +113,7 @@ module CouchRest
         def count
           raise "View#count cannot be used with group options" if query[:group]
           if can_reduce?
-            row = reduce.rows.first
+            row = reduce.skip(0).limit(1).rows.first
             row.nil? ? 0 : row.value
           else
             limit(0).total_rows
@@ -232,11 +239,19 @@ module CouchRest
         end
 
 
-        # The results should be provided in descending order.
+        # The results should be provided in descending order. If the startkey or
+        # endkey query options have already been seen set, calling this method
+        # will automatically swap the options around. If you don't want this,
+        # simply set descending before any other option.
         #
-        # Descending is false by default, this method will enable it and cannot
-        # be undone.
+        # Descending is false by default, and this method cannot
+        # be undone once used, it has no inverse option.
         def descending
+          if query[:startkey] || query[:endkey]
+            query[:startkey], query[:endkey] = query[:endkey], query[:startkey]
+          elsif query[:startkey_docid] || query[:endkey_docid]
+            query[:startkey_docid], query[:endkey_docid] = query[:endkey_docid], query[:startkey_docid]
+          end
           update_query(:descending => true)
         end
 
@@ -383,30 +398,22 @@ module CouchRest
         def execute
           return self.result if result
           raise "Database must be defined in model or view!" if use_database.nil?
-          retryable = true
-          # Remove the reduce value if its not needed
+
+          # Remove the reduce value if its not needed to prevent CouchDB errors
           query.delete(:reduce) unless can_reduce?
-          begin
-            self.result = model.design_doc.view_on(use_database, name, query.reject{|k,v| v.nil?})
-          rescue RestClient::ResourceNotFound => e
-            if retryable
-              model.save_design_doc(use_database)
-              retryable = false
-              retry
-            else
-              raise e
-            end
-          end
+
+          model.save_design_doc(use_database)
+
+          self.result = model.design_doc.view_on(use_database, name, query.reject{|k,v| v.nil?})
         end
 
         # Class Methods
         class << self
-          
           # Simplified view creation. A new view will be added to the 
           # provided model's design document using the name and options.
           #
           # If the view name starts with "by_" and +:by+ is not provided in 
-          # the options, the new view's map method will be interpretted and
+          # the options, the new view's map method will be interpreted and
           # generated automatically. For example:
           #
           #   View.create(Meeting, "by_date_and_name")

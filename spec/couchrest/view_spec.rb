@@ -7,11 +7,15 @@ require File.join(FIXTURE_PATH, 'more', 'course')
 describe "Model views" do
 
   class Unattached < CouchRest::Model::Base
-    # Note: no use_database here
     property :title
     property :questions
     property :professor
     view_by :title
+
+    # Force the database to always be nil
+    def self.database
+      nil
+    end
   end
  
 
@@ -19,11 +23,11 @@ describe "Model views" do
     # NOTE! Add more unit tests!
 
     describe "#view" do
-    
+
       it "should not alter original query" do
         options = { :database => DB }
         view = Article.view('by_date', options)
-        options[:database].should_not be_nil
+        options[:database].should eql(DB)
       end
 
     end
@@ -56,35 +60,6 @@ describe "Model views" do
         written_at += 24 * 3600
       end
     end
-    it "should have a design doc" do
-      Article.design_doc["views"]["by_date"].should_not be_nil
-    end
-    it "should save the design doc" do
-      Article.by_date #rescue nil
-      doc = Article.database.get Article.design_doc.id
-      doc['views']['by_date'].should_not be_nil
-    end
-    it "should save design doc if a view changed" do
-      Article.by_date
-      orig = Article.stored_design_doc
-      orig['views']['by_date']['map'] = "function() { }"
-      Article.database.save_doc(orig)
-      rev = Article.stored_design_doc['_rev']
-      Article.req_design_doc_refresh # prepare for re-load
-      Article.by_date
-      orig = Article.stored_design_doc
-      orig['views']['by_date']['map'].should eql(Article.design_doc['views']['by_date']['map'])
-      orig['_rev'].should_not eql(rev)
-    end
-    it "should not save design doc if not changed" do
-      Article.by_date
-      orig = Article.stored_design_doc['_rev']
-      Article.req_design_doc_refresh
-      Article.by_date
-      Article.stored_design_doc['_rev'].should eql(orig)
-    end
-
-
     it "should return the matching raw view result" do
       view = Article.by_date :raw => true
       view['rows'].length.should == 4
@@ -107,9 +82,8 @@ describe "Model views" do
       Article.view_by :title
       lambda{Article.by_title}.should_not raise_error 
     end
-   
   end
-  
+
   describe "another model with a simple view" do
     before(:all) do
       reset_test_db!
@@ -225,7 +199,7 @@ describe "Model views" do
     end
   end
   
-  describe "a model class not tied to a database" do
+  describe "a model class with database provided manually" do
     before(:all) do
       reset_test_db!
       @db = DB 
@@ -240,7 +214,6 @@ describe "Model views" do
       lambda{Unattached.all}.should raise_error
     end
     it "should query all" do
-      # Unattached.cleanup_design_docs!(@db)
       rs = Unattached.all :database => @db
       rs.length.should == 4
     end
@@ -297,19 +270,7 @@ describe "Model views" do
       u = Unattached.last :database=>@db
       u.title.should == "aaa"
     end
-    
-    it "should barf on all_design_doc_versions if no database given" do
-      lambda{Unattached.all_design_doc_versions}.should raise_error
-    end
-    it "should be able to cleanup the db/bump the revision number" do
-      # if the previous specs were not run, the model_design_doc will be blank
-      Unattached.use_database DB
-      Unattached.view_by :questions
-      Unattached.by_questions(:database => @db)
-      original_revision = Unattached.model_design_doc(@db)['_rev']
-      Unattached.save_design_doc!(@db)
-      Unattached.model_design_doc(@db)['_rev'].should_not == original_revision
-    end
+
   end
   
   describe "a model with a compound key view" do
@@ -377,7 +338,7 @@ describe "Model views" do
     before(:each) do
       reset_test_db!
       Article.by_date
-      @original_doc_rev = Article.model_design_doc['_rev']
+      @original_doc_rev = Article.stored_design_doc['_rev']
       @design_docs = Article.database.documents :startkey => "_design/", :endkey => "_design/\u9999"
     end
     it "should not create a design doc on view definition" do
@@ -386,10 +347,9 @@ describe "Model views" do
       newdocs["rows"].length.should == @design_docs["rows"].length
     end
     it "should create a new version of the design document on view access" do
-      ddocs = Article.all_design_doc_versions["rows"].length
       Article.view_by :updated_at
       Article.by_updated_at
-      @original_doc_rev.should_not == Article.model_design_doc['_rev']
+      @original_doc_rev.should_not == Article.stored_design_doc['_rev']
       Article.design_doc["views"].keys.should include("by_updated_at")
     end
   end

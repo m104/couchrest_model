@@ -55,6 +55,13 @@ describe "Model properties" do
     card.calias.name.should == ["Aimonetti"]
   end
 
+  it "should raise error if property name coincides with model type key" do
+    lambda { Cat.property(Cat.model_type_key) }.should raise_error(/already used/)
+  end
+
+  it "should not raise error if property name coincides with model type key on non-model" do
+    lambda { Person.property(Article.model_type_key) }.should_not raise_error
+  end
 
   it "should be auto timestamped" do
     @card.created_at.should be_nil
@@ -354,10 +361,10 @@ describe "Property Class" do
       property.cast(parent, ["2010-06-01", "2010-06-02"]).class.should eql(CouchRest::Model::CastedArray)
     end
 
-    it "should not set a CastedArray on array of Strings" do
+    it "should set a CastedArray on array of Strings" do
       property = CouchRest::Model::Property.new(:test, [String])
       parent = mock("FooObject")
-      property.cast(parent, ["2010-06-01", "2010-06-02"]).class.should_not eql(CouchRest::Model::CastedArray)
+      property.cast(parent, ["2010-06-01", "2010-06-02"]).class.should eql(CouchRest::Model::CastedArray)
     end
 
     it "should raise and error if value is array when type is not" do

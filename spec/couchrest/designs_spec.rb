@@ -31,11 +31,6 @@ describe "Design" do
         DesignModel.design { foo }
       end
 
-      it "should request a design refresh" do
-        DesignModel.should_receive(:req_design_doc_refresh)
-        DesignModel.design() { }
-      end
-
       it "should work even if a block is not provided" do
         lambda { DesignModel.design }.should_not raise_error
       end
@@ -88,6 +83,20 @@ describe "Design" do
         CouchRest::Model::Designs::View.stub!(:create)
         @object.should_receive(:create_view_method).with('test')
         @object.view('test')
+      end
+
+    end
+
+    describe "#filter" do
+
+      before :each do
+        @object = @klass.new(DesignModel)
+      end
+
+      it "should add the provided function to the design doc" do
+        @object.filter(:important, "function(doc, req) { return doc.priority == 'high'; }")
+        DesignModel.design_doc['filters'].should_not be_empty
+        DesignModel.design_doc['filters']['important'].should_not be_blank
       end
 
     end

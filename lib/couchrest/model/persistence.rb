@@ -12,7 +12,9 @@ module CouchRest
           _run_save_callbacks do
             set_unique_id if new? && self.respond_to?(:set_unique_id)
             result = database.save_doc(self)
-            (result["ok"] == true) ? self : false
+            ret = (result["ok"] == true) ? self : false
+            @changed_attributes.clear if ret && @changed_attributes
+            ret
           end
         end
       end
@@ -28,10 +30,13 @@ module CouchRest
       def update(options = {})
         raise "Calling #{self.class.name}#update on document that has not been created!" if self.new?
         return false unless perform_validations(options)
+        return true if !self.disable_dirty && !self.changed?
         _run_update_callbacks do
           _run_save_callbacks do
             result = database.save_doc(self)
-            result["ok"] == true
+            ret = result["ok"] == true
+            @changed_attributes.clear if ret && @changed_attributes
+            ret
           end
         end
       end
@@ -83,7 +88,6 @@ module CouchRest
         merge!(self.class.get(id))
         self
       end
-
 
       protected
 
@@ -138,7 +142,7 @@ module CouchRest
         # must be globally unique across all document types which share a
         # database, so if you'd like to scope uniqueness to this class, you
         # should use the class name as part of the unique id.
-        def unique_id method = nil, &block
+        def unique_id(method = nil, &block)
           if method
             define_method :set_unique_id do
               self['_id'] ||= self.send(method)

@@ -4,7 +4,13 @@ module CouchRest
     module Proxyable
       extend ActiveSupport::Concern
 
+      def proxy_database
+        raise StandardError, "Please set the #proxy_database_method" if self.class.proxy_database_method.nil?
+        @proxy_database ||= self.class.prepare_database(self.send(self.class.proxy_database_method))
+      end
+
       module ClassMethods
+
 
         # Define a collection that will use the base model for the database connection
         # details.
@@ -13,19 +19,19 @@ module CouchRest
           options[:class_name] ||= assoc_name.to_s.singularize.camelize
           class_eval <<-EOS, __FILE__, __LINE__ + 1
             def #{assoc_name}
-              unless respond_to?('#{db_method}')
-                raise "Missing ##{db_method} method for proxy"
-              end
               @#{assoc_name} ||= CouchRest::Model::Proxyable::ModelProxy.new(::#{options[:class_name]}, self, self.class.to_s.underscore, #{db_method})
             end
           EOS
         end
 
+        # Tell this model which other model to use a base for the database
+        # connection to use.
         def proxied_by(model_name, options = {})
           raise "Model can only be proxied once or ##{model_name} already defined" if method_defined?(model_name) || !proxy_owner_method.nil?
           self.proxy_owner_method = model_name
           attr_accessor :model_proxy
           attr_accessor model_name
+          overwrite_database_reader(model_name)
         end
 
         # Define an a class variable accessor ready to be inherited and unique
@@ -33,6 +39,25 @@ module CouchRest
         # Perhaps there is a shorter way of writing this.
         def proxy_owner_method=(name); @proxy_owner_method = name; end
         def proxy_owner_method; @proxy_owner_method; end
+
+        # Define the name of a method to call to determine the name of
+        # the database to use as a proxy.
+        def proxy_database_method(name = nil)
+          @proxy_database_method = name if name
+          @proxy_database_method
+        end
+
+        private
+
+        # Ensure that no attempt is made to autoload a database connection
+        # by overwriting it to provide a basic accessor.
+        def overwrite_database_reader(model_name)
+          class_eval <<-EOS, __FILE__, __LINE__ + 1
+            def self.database
+              raise StandardError, "#{self.to_s} database must be accessed via '#{model_name}' proxy"
+            end
+          EOS
+        end
 
       end
 
@@ -48,7 +73,6 @@ module CouchRest
         end
 
         # Base
-        
         def new(*args)
           proxy_update(model.new(*args))
         end
@@ -56,7 +80,7 @@ module CouchRest
         def build_from_database(doc = {})
           proxy_update(model.build_from_database(doc))
         end
-        
+
         def method_missing(m, *args, &block)
           if has_view?(m)
             if model.respond_to?(m)
@@ -73,32 +97,32 @@ module CouchRest
           end
           super
         end
-        
+
         # DocumentQueries
-        
+
         def all(opts = {}, &block)
           proxy_update_all(@model.all({:database => @database}.merge(opts), &block))
         end
-        
+
         def count(opts = {})
           @model.count({:database => @database}.merge(opts))
         end
-        
+
         def first(opts = {})
           proxy_update(@model.first({:database => @database}.merge(opts)))
         end
-        
+
         def last(opts = {})
           proxy_update(@model.last({:database => @database}.merge(opts)))
         end
-        
+
         def get(id)
           proxy_update(@model.get(id, @database))
         end
         alias :find :get
-        
+
         # Views
-        
+
         def has_view?(view)
           @model.has_view?(view)
         end
@@ -106,27 +130,22 @@ module CouchRest
         def view_by(*args)
           @model.view_by(*args)
         end
-       
+
         def view(name, query={}, &block)
           proxy_update_all(@model.view(name, {:database => @database}.merge(query), &block))
         end
-        
+
         def first_from_view(name, *args)
           # add to first hash available, or add to end
           (args.last.is_a?(Hash) ? args.last : (args << {}).last)[:database] = @database
           proxy_update(@model.first_from_view(name, *args))
         end
-       
+
         # DesignDoc
-        
         def design_doc
           @model.design_doc
         end
-        
-        def refresh_design_doc(db = nil)
-          @model.refresh_design_doc(db || @database)
-        end
-        
+
         def save_design_doc(db = nil)
           @model.save_design_doc(db || @database)
         end

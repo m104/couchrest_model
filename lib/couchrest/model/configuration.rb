@@ -10,10 +10,28 @@ module CouchRest
       included do
         add_config :model_type_key
         add_config :mass_assign_any_attribute
-        
+        add_config :auto_update_design_doc
+        add_config :environment
+        add_config :connection
+        add_config :connection_config_file
+
         configure do |config|
-          config.model_type_key = 'couchrest-type' # 'model'?
+          config.model_type_key = 'type' # was 'couchrest-type'
           config.mass_assign_any_attribute = false
+          config.auto_update_design_doc = true
+
+          config.environment = :development
+          config.connection_config_file = File.join(Dir.pwd, 'config', 'couchdb.yml')
+          config.connection = {
+            :protocol => 'http',
+            :host     => 'localhost',
+            :port     => '5984',
+            :prefix   => 'couchrest',
+            :suffix   => nil,
+            :join     => '_',
+            :username => nil,
+            :password => nil
+          }
         end
       end
 
@@ -47,5 +65,3 @@ module CouchRest
     end
   end
 end
-
-

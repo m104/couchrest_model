@@ -14,7 +14,7 @@ module CouchRest
 
       response['rows'] = rows.map do |row|
         doc = row['doc']
-        type = doc['couchrest-type']
+        type = doc['couchrest-type'] || doc['type']
         if type
           klass = type.constantize
           if klass.respond_to? :build_from_database

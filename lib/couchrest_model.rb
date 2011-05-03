@@ -8,6 +8,7 @@ require "active_model/serialization"
 require "active_model/translation"
 require "active_model/validator"
 require "active_model/validations"
+require "active_model/dirty"
 
 require 'active_support/core_ext'
 require 'active_support/json'
@@ -26,10 +27,14 @@ require 'couchrest/model'
 require 'couchrest/model/errors'
 require "couchrest/model/persistence"
 require "couchrest/model/typecast"
+require "couchrest/model/casted_by"
+require "couchrest/model/dirty"
 require "couchrest/model/property"
 require "couchrest/model/property_protection"
-require "couchrest/model/casted_array"
 require "couchrest/model/properties"
+require "couchrest/model/casted_array"
+require "couchrest/model/casted_hash"
+require "couchrest/model/casted_model"
 require "couchrest/model/validations"
 require "couchrest/model/callbacks"
 require "couchrest/model/document_queries"
@@ -41,12 +46,13 @@ require "couchrest/model/proxyable"
 require "couchrest/model/collection"
 require "couchrest/model/associations"
 require "couchrest/model/configuration"
+require "couchrest/model/connection"
 require "couchrest/model/designs"
 require "couchrest/model/designs/view"
 
 # Monkey patches applied to couchrest
-require "couchrest/model/support/couchrest"
-require "couchrest/database/casted_view"
+require "couchrest/model/support/couchrest_design"
+
 # Core Extensions
 require "couchrest/model/core_extensions/hash"
 require "couchrest/model/core_extensions/time_parsing"
@@ -54,7 +60,9 @@ require "couchrest/model/core_extensions/time_parsing"
 # Base libraries
 require "couchrest/model/casted_model"
 require "couchrest/model/base"
-
+require "couchrest/database/casted_view"
 # Add rails support *after* everything has loaded
 
-require "couchrest/railtie"
+if defined?(Rails)
+  require "couchrest/railtie"
+end

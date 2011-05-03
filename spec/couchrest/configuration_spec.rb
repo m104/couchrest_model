@@ -59,7 +59,7 @@ describe CouchRest::Model::Base do
   describe "General examples" do
 
     before(:all) do
-      @default_model_key = 'model'
+      @default_model_key = 'model-type'
     end
 
 

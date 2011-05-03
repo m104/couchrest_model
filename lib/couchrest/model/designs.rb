@@ -28,8 +28,6 @@ module CouchRest
           mapper.create_view_method(:all)
 
           mapper.instance_eval(&block) if block_given?
-
-          req_design_doc_refresh
         end
 
         # Override the default page pagination value:
@@ -65,6 +63,17 @@ module CouchRest
         def view(name, opts = {})
           View.create(model, name, opts)
           create_view_method(name)
+        end
+
+        # Really simple design function that allows a filter
+        # to be added. Filters are simple functions used when listening
+        # to the _changes feed.
+        #
+        # No methods are created here, the design is simply updated.
+        # See the CouchDB API for more information on how to use this.
+        def filter(name, function)
+          filters = (self.model.design_doc['filters'] ||= {})
+          filters[name.to_s] = function
         end
 
         def create_view_method(name)

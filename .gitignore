@@ -6,4 +6,6 @@ pkg
 .bundle
 couchdb.std*
 *.*~
-
+Gemfile.lock
+spec.out
+*.gem

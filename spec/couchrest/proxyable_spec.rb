@@ -3,8 +3,9 @@ require File.expand_path("../../spec_helper", __FILE__)
 require File.join(FIXTURE_PATH, 'more', 'cat')
 
 class DummyProxyable < CouchRest::Model::Base
-  def proxy_database
-    'db' # Do not use this!
+  proxy_database_method :db
+  def db
+    'db'
   end
 end
 
@@ -13,13 +14,39 @@ end
 
 describe "Proxyable" do
 
-  describe "class methods" do
+  describe "#proxy_database" do
 
-    before(:each) do
-      @class = DummyProxyable.clone
+    before do
+      @class = Class.new(CouchRest::Model::Base)
+      @class.class_eval do 
+        def slug; 'proxy'; end
+      end
+      @obj = @class.new
     end
 
+    it "should respond to method" do
+      @obj.should respond_to(:proxy_database)
+    end
+
+    it "should provide proxy database from method" do
+      @class.stub!(:proxy_database_method).twice.and_return(:slug)
+      @obj.proxy_database.should be_a(CouchRest::Database)
+      @obj.proxy_database.name.should eql('couchrest_proxy')
+    end
+
+    it "should raise an error if called and no proxy_database_method set" do
+      lambda { @obj.proxy_database }.should raise_error(StandardError, /Please set/)
+    end
+
+  end
+
+  describe "class methods" do
+
+
     describe ".proxy_owner_method" do
+      before(:each) do
+        @class = DummyProxyable.clone
+      end
       it "should provide proxy_owner_method accessors" do
         @class.should respond_to(:proxy_owner_method)
         @class.should respond_to(:proxy_owner_method=)
@@ -30,7 +57,20 @@ describe "Proxyable" do
       end
     end
 
+    describe ".proxy_database_method" do
+      before do
+        @class = Class.new(CouchRest::Model::Base)
+      end
+      it "should be possible to set the proxy database method" do
+        @class.proxy_database_method :db
+        @class.proxy_database_method.should eql(:db)
+      end
+    end
+
     describe ".proxy_for" do
+      before(:each) do
+        @class = DummyProxyable.clone
+      end
 
       it "should be provided" do
         @class.should respond_to(:proxy_for)
@@ -48,7 +88,6 @@ describe "Proxyable" do
           @obj = DummyProxyable.new
           CouchRest::Model::Proxyable::ModelProxy.should_receive(:new).with(Cat, @obj, 'dummy_proxyable', 'db').and_return(true)
           @obj.should_receive('proxy_database').and_return('db')
-          @obj.should_receive(:respond_to?).with('proxy_database').and_return(true)
           @obj.cats
         end
 
@@ -60,26 +99,16 @@ describe "Proxyable" do
           @obj = DummyProxyable.new
           CouchRest::Model::Proxyable::ModelProxy.should_receive(:new).with(::Document, @obj, 'dummy_proxyable', 'db').and_return(true)
           @obj.should_receive('proxy_database').and_return('db')
-          @obj.should_receive(:respond_to?).with('proxy_database').and_return(true)
           @obj.documents
-        end
-
-        it "should raise an error if the database method is missing" do
-          @class.proxy_for(:cats)
-          @obj = @class.new
-          @obj.should_receive(:respond_to?).with('proxy_database').and_return(false)
-          lambda { @obj.cats }.should raise_error(StandardError, "Missing #proxy_database method for proxy")
-        end
-
-        it "should raise an error if custom database method missing" do
-          @class.proxy_for(:proxy_kittens, :database_method => "foobardom")
-          @obj = @class.new
-          lambda { @obj.proxy_kittens }.should raise_error(StandardError, "Missing #foobardom method for proxy")
         end
       end
     end
 
     describe ".proxied_by" do
+      before do
+        @class = Class.new(CouchRest::Model::Base)
+      end
+
       it "should be provided" do
         @class.should respond_to(:proxied_by)
       end
@@ -106,6 +135,11 @@ describe "Proxyable" do
       it "should raise an error if object already has a proxy" do
         @class.proxied_by(:department)
         lambda { @class.proxied_by(:company) }.should raise_error
+      end
+
+      it "should overwrite the database method to provide an error" do
+        @class.proxied_by(:company)
+        lambda { @class.database }.should raise_error(StandardError, /database must be accessed via/)
       end
     end
   end
@@ -233,17 +267,6 @@ describe "Proxyable" do
         @obj.design_doc
       end
 
-      describe "#refresh_design_doc" do
-        it "should be proxied without database arg" do
-          Cat.should_receive(:refresh_design_doc).with('database')
-          @obj.refresh_design_doc
-        end
-        it "should be proxied with database arg" do
-          Cat.should_receive(:refresh_design_doc).with('db')
-          @obj.refresh_design_doc('db')
-        end
-      end
-
       describe "#save_design_doc" do
         it "should be proxied without args" do
           Cat.should_receive(:save_design_doc).with('database')
@@ -327,7 +350,7 @@ describe "Proxyable" do
 
     it "should allow creation of new entries" do
       inv = @company.proxyable_invoices.new(:client => "Lorena", :total => 35)
-      inv.database.should_not be_nil
+      # inv.database.should_not be_nil
       inv.save.should be_true
       @company.proxyable_invoices.count.should eql(1)
       @company.proxyable_invoices.first.client.should eql("Lorena")
