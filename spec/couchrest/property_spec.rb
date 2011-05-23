@@ -1,5 +1,6 @@
 # encoding: utf-8
 require File.expand_path('../../spec_helper', __FILE__)
+require File.join(FIXTURE_PATH, 'more', 'article')
 require File.join(FIXTURE_PATH, 'more', 'cat')
 require File.join(FIXTURE_PATH, 'more', 'person')
 require File.join(FIXTURE_PATH, 'more', 'card')
@@ -69,6 +70,24 @@ describe "Model properties" do
     @card.save.should be_true
     @card.created_at.should_not be_nil
     @card.updated_at.should_not be_nil
+  end
+
+  describe "#as_json" do
+
+    it "should provide a simple hash from model" do
+      @card.as_json.class.should eql(Hash)
+    end
+
+    it "should remove properties from Hash if value is nil" do
+      @card.last_name = nil
+      @card.as_json.keys.include?('last_name').should be_false
+    end
+
+    it "should pass options to Active Support's as_json" do
+      @card.last_name = "Aimonetti"
+      @card.as_json(:only => 'last_name').should eql('last_name' => 'Aimonetti')
+    end
+
   end
 
   describe '#read_attribute' do
@@ -339,6 +358,28 @@ describe "Property Class" do
     property.init_method.should eql('parse')
   end
 
+  describe "#build" do
+    it "should allow instantiation of new object" do
+      property = CouchRest::Model::Property.new(:test, Date)
+      obj = property.build(2011, 05, 21)
+      obj.should eql(Date.new(2011, 05, 21))
+    end
+    it "should use init_method if provided" do
+      property = CouchRest::Model::Property.new(:test, Date, :init_method => 'parse')
+      obj = property.build("2011-05-21")
+      obj.should eql(Date.new(2011, 05, 21))
+    end
+    it "should use init_method Proc if provided" do
+      property = CouchRest::Model::Property.new(:test, Date, :init_method => Proc.new{|v| Date.parse(v)})
+      obj = property.build("2011-05-21")
+      obj.should eql(Date.new(2011, 05, 21))
+    end
+    it "should raise error if no class" do
+      property = CouchRest::Model::Property.new(:test)
+      lambda { property.build }.should raise_error(StandardError, /Cannot build/)
+    end
+  end
+
   ## Property Casting method. More thoroughly tested in typecast_spec.
 
   describe "casting" do
@@ -365,6 +406,18 @@ describe "Property Class" do
       property = CouchRest::Model::Property.new(:test, [String])
       parent = mock("FooObject")
       property.cast(parent, ["2010-06-01", "2010-06-02"]).class.should eql(CouchRest::Model::CastedArray)
+    end
+
+    it "should allow instantion of model via CastedArray#build" do
+      property = CouchRest::Model::Property.new(:dates, [Date])
+      parent = Article.new
+      ary = property.cast(parent, [])
+      obj = ary.build(2011, 05, 21)
+      ary.length.should eql(1)
+      ary.first.should eql(Date.new(2011, 05, 21))
+      obj = ary.build(2011, 05, 22)
+      ary.length.should eql(2)
+      ary.last.should eql(Date.new(2011, 05, 22))
     end
 
     it "should raise and error if value is array when type is not" do
